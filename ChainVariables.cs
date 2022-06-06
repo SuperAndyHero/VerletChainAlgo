@@ -73,6 +73,6 @@ namespace VerletChainAlgo
                 new Vector2(3, -9) * new Vector2(1, -1)
         };
 
-        public Vector2 ChainStartOffset = new Vector2(0, 0);//the origin of the chain
+        public Vector2 ChainOffset = new Vector2(0, 0);//the origin of the chain
     }
 }

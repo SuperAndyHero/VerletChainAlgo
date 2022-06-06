@@ -141,7 +141,7 @@ namespace VerletChainAlgo
             }
 
 
-            chain = new VerletChainInstance(info.vertexCount, position + info.ChainStartOffset,
+            chain = new VerletChainInstance(info.vertexCount, position + info.ChainOffset,
                 position + ((settledPoints[info.vertexCount - 1]) * facingDirection), info.vertexDefaultDistance, info.VertexGravityMult * facingDirection,
                 gravities, VertexGravityArray?.ToList(), distances, info.VertexDistanceArray?.ToList())
             {
@@ -149,18 +149,23 @@ namespace VerletChainAlgo
                 constraintRepetitions = info.PhysicsRepetitions
             };
 
+            SetShapeBuffer(info.WantedVertexPoints, info.ChainOffset);
+
+            NextWantedVertexGravityArray = Enumerable.Repeat(Vector2.Zero, info.vertexCount).ToArray();
+        }
+
+        public void SetShapeBuffer(Vector2[] RelativePoints, Vector2 offset)
+        {
             VertexPositionColor[] vertexPos = new VertexPositionColor[shapeBuffer.VertexCount];
             Vector2 combinedPos = Vector2.Zero;
 
             for (int i = 0; i < vertexPos.Length; i++)
             {
-                combinedPos += info.WantedVertexPoints[i];
-                vertexPos[i] = new VertexPositionColor(new Vector3(combinedPos + info.ChainStartOffset, 0), Color.Red);
+                combinedPos += RelativePoints[i];
+                vertexPos[i] = new VertexPositionColor(new Vector3(combinedPos + offset, 0), Color.Red);
             }
 
             shapeBuffer.SetData(vertexPos);
-
-            NextWantedVertexGravityArray = Enumerable.Repeat(Vector2.Zero, info.vertexCount).ToArray();
         }
 
         protected override void LoadContent()
@@ -200,6 +205,9 @@ namespace VerletChainAlgo
         public bool LeftMousePressed() =>
             mouseState.LeftButton == ButtonState.Pressed && !(lastMouseState.LeftButton == ButtonState.Pressed);
 
+        public bool RightMousePressed() =>
+            mouseState.RightButton == ButtonState.Pressed && !(lastMouseState.RightButton == ButtonState.Pressed);
+
         protected override void Update(GameTime gameTime)
         {
             Vector2 newviewSize = new Vector2(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
@@ -238,22 +246,33 @@ namespace VerletChainAlgo
             {
                 case SimState.waiting:
                     if (ButtonPressed(Keys.Space) || ButtonPressed(Keys.Enter))
-                    {
                         StartSimMode();
-                    }
                     else if (ButtonPressed(Keys.Tab))
-                    {
                         StartBuildMode();
-                    }
                     break;
                 case SimState.placement:
                     SnapToGrid = keyboardState.IsKeyDown(Keys.LeftShift) || keyboardState.IsKeyDown(Keys.RightShift);
+                    if (ButtonPressed(Keys.Enter))
+                    {
+                        //do etc here saving values to chainvars
+                        StartSimMode();
+                    }
+                    if (ButtonPressed(Keys.Tab))
+                    {
+                        //save here too
+                        StartWaitingMode();
+                    }
+                    if (ButtonPressed(Keys.Escape))
+                        StartWaitingMode();
+
+                    if (LeftMousePressed())
+                        PlacementList.Add(SnapToGrid ? RoundedSnapPos.ToVector2() : RoundedNormalPos);
+                    if (RightMousePressed())
+                        PlacementList.RemoveAt(PlacementList.Count - 1);
                     break;
                 case SimState.running:
                     if (ButtonPressed(Keys.Escape))
-                    {
                         StartWaitingMode();
-                    }
                     if (ButtonPressed(Keys.Space))
                         paused = !paused;
                     if (!paused)
@@ -301,6 +320,7 @@ namespace VerletChainAlgo
         public void StartBuildMode()
         {
             DeleteChain();
+            OldPlacementListCount = 0;
             CurrentState = SimState.placement;
         }
         public void StartSimMode()
@@ -311,6 +331,7 @@ namespace VerletChainAlgo
         public void StartWaitingMode()
         {
             DeleteChain();
+            OldPlacementListCount = 0;
             CurrentState = SimState.waiting;
         }
 
@@ -414,6 +435,10 @@ namespace VerletChainAlgo
             }
         }
 
+        public Matrix SpriteMatrix = new Matrix();
+        public Vector3 SpriteMatrixScale = Vector3.One;
+        public Vector3 SpriteMatrixTranslation = Vector3.One;
+
         public void DrawTextCentered(SpriteBatch sb, SpriteFont font, string text, Vector2 center, Color color, float scale)
         {
             Vector2 textSize = font_Arial.MeasureString(text) * scale;
@@ -421,20 +446,58 @@ namespace VerletChainAlgo
             sb.DrawString(font, text, textPosition, color, 0f, default, scale, default, default);
         }
 
+        public int OldPlacementListCount = 0;
+
+        
+        public Vector2 MouseRealPos => (MousePosition - new Vector2(SpriteMatrixTranslation.X, SpriteMatrixTranslation.Y));
+        public Vector2 Round => new Vector2((float)Math.Round(MouseRealPos.X / SpriteMatrixScale.X) * SpriteMatrixScale.X, (float)Math.Round(MouseRealPos.Y / SpriteMatrixScale.Y) * SpriteMatrixScale.Y);
+        public Vector2 Off2 => MouseRealPos - Round;
+
+        public Vector2 SnapPos => Round / new Vector2(SpriteMatrixScale.X, SpriteMatrixScale.Y);
+        public Point RoundedSnapPos => new Point((int)Math.Round(SnapPos.X), (int)Math.Round(SnapPos.Y));
+
+        public Vector2 NormalPos => MouseRealPos / new Vector2(SpriteMatrixScale.X, SpriteMatrixScale.Y);
+        public Vector2 RoundedNormalPos => new Vector2((float)Math.Round(NormalPos.X, 2), (float)Math.Round(NormalPos.Y, 2));
+
+        public void AddSelectedChain(GameTime gameTime, bool mouse)
+        {
+            if (PlacementList.Count > (mouse ? 0 : 1))
+            {
+                if (OldPlacementListCount != PlacementList.Count)
+                    shapeBuffer = new VertexBuffer(_graphics.GraphicsDevice, typeof(VertexPositionColor), PlacementList.Count + (mouse ? 1 : 0), BufferUsage.WriteOnly);
+
+                VertexPositionColor[] vertexPos = new VertexPositionColor[shapeBuffer.VertexCount];
+
+                for (int i = 0; i < PlacementList.Count; i++)
+                {
+                    vertexPos[i] = new VertexPositionColor(new Vector3(PlacementList[i], 0), Color.Red);
+                }
+
+                if(mouse)
+                    vertexPos[PlacementList.Count] = new VertexPositionColor(new Vector3(SnapToGrid ? RoundedSnapPos.ToVector2() : RoundedNormalPos, 0), Color.Lerp(Color.White, Color.Green, ((float)Math.Sin(gameTime.TotalGameTime.Ticks / 2000000f) + 1) / 2));
+
+                OldPlacementListCount = PlacementList.Count;
+                shapeBuffer.SetData(vertexPos);
+            }
+        }
+
         protected override void Draw(GameTime gameTime)
         { 
             GraphicsDevice.Clear(new Color(41, 43, 47));
             const float gridscale = 0.0625f;
 
-            Matrix mat = Matrix.CreateTranslation(new Vector3(EverythingDrawOffset * new Vector2(1, -1), 0)) * Matrix.CreateScale(EverythingDrawScale, EverythingDrawScale, 1) * Matrix.CreateTranslation(viewSize.X / 2, viewSize.Y / 2, 0);
+            SpriteMatrix = Matrix.CreateTranslation(new Vector3(EverythingDrawOffset * new Vector2(1, -1), 0)) * Matrix.CreateScale(EverythingDrawScale, EverythingDrawScale, 1) * Matrix.CreateTranslation(viewSize.X / 2, viewSize.Y / 2, 0);
+            SpriteMatrix.Decompose(out Vector3 scale, out Quaternion qu, out Vector3 transl);
+            SpriteMatrixScale = scale;
+            SpriteMatrixTranslation = transl;
 
-            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, mat);
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, SpriteMatrix);
             _spriteBatch.Draw(backTexture, new Vector2(0,0) - new Vector2(0, (backTexture.Height * SimInfo.SpriteScale)) - (SimInfo.SpriteOffset), null, new Color(150, 150, 150), 0f, default, SimInfo.SpriteScale, SpriteEffects.None, default);
             _spriteBatch.End();
 
             float gridHeight = grid.Height * gridscale;
             float gridWidth = grid.Width * gridscale;
-            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, mat);
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, SpriteMatrix);
             _spriteBatch.Draw(grid, new Vector2(0, -gridHeight), null, new Color(74, 75, 79), 0f, default, gridscale, SpriteEffects.FlipVertically, default);
             _spriteBatch.Draw(grid, new Vector2(0, 0), null, new Color(49, 48, 52), 0f, default, gridscale, SpriteEffects.FlipVertically, default);
             _spriteBatch.Draw(grid, new Vector2(-gridWidth, -gridHeight), null, new Color(39, 38, 32), 0f, default, gridscale, SpriteEffects.FlipVertically, default);
@@ -476,6 +539,7 @@ namespace VerletChainAlgo
                     _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null);
                     DrawTextCentered(_spriteBatch, font_Arial, "Press space to start/enter or tab to edit", new Vector2(viewSize.X / 2, 25), Color.IndianRed * 0.35f, 1.2f);
                     _spriteBatch.End();
+                    AddSelectedChain(gameTime, false);
                     break;
 
                 case SimState.placement:
@@ -487,25 +551,16 @@ namespace VerletChainAlgo
                             _spriteBatch.DrawString(font_Arial, "Target Pos " + i.ToString() + " : " + (chain.ropeSegments[i].posNow - position).ToString(), new Vector2(viewSize.X - 265, 30 + (i * 20)), Color.White * 0.8f);
                         }
                     }
-                    mat.Decompose(out Vector3 scale, out Quaternion qu, out Vector3 transl);
-                    //Vector2 snap = (Vector2.Round(((MousePosition + (EverythingDrawOffset * new Vector2(1, -1))) / EverythingDrawScale)) * EverythingDrawScale);
-                    //Vector2 snap2 = (Vector2.Round(((MousePosition) / EverythingDrawScale)) * EverythingDrawScale);
-                    Vector2 mouseRealPos = (MousePosition - new Vector2(transl.X, transl.Y));
-                    Vector2 round = new Vector2((float)Math.Round(mouseRealPos.X / scale.X) * scale.X, (float)Math.Round(mouseRealPos.Y / scale.Y) * scale.Y);
-                    Vector2 off2 = mouseRealPos - round;
 
-                    Vector2 snapPos = round / new Vector2(scale.X, scale.Y);
-                    Point roundedSnapPos = new Point((int)Math.Round(snapPos.X), (int)Math.Round(snapPos.Y));
-
-                    Vector2 normalPos = mouseRealPos / new Vector2(scale.X, scale.Y);
-                    Vector2 roundedNormalPos = new Vector2((float)Math.Round(normalPos.X, 2), (float)Math.Round(normalPos.Y, 2));
-
-
-                    _spriteBatch.Draw(circle, SnapToGrid ? MousePosition - off2 : new Vector2((float)Math.Round(MousePosition.X / scale.X, 2) * scale.X, (float)Math.Round(MousePosition.Y / scale.Y, 2) * scale.Y), null, Color.Green, 0f, new Vector2(circle.Width, circle.Height) / 2, 0.03f, default, default);
-                    _spriteBatch.DrawString(font_Arial, "Placement Mode", new Vector2(viewSize.X / 2, 25) - font_Arial.MeasureString("Stopped"), Color.IndianRed * 0.35f, 0f, default, 2f, default, default);
-                    _spriteBatch.DrawString(font_Arial, "Hold shift to snap to grid, lclick to place, and enter to simulate", new Vector2(viewSize.X / 2 - 90, viewSize.Y - 30), Color.White * 0.50f, 0f, default, 1.2f, default, default);
-                    _spriteBatch.DrawString(font_Arial, SnapToGrid ? roundedSnapPos.ToString() : roundedNormalPos.ToString(), MousePosition, Color.White * 0.75f, 0f, default, 1f, default, default); ;
+                    _spriteBatch.Draw(circle, SnapToGrid ? MousePosition - Off2 : new Vector2((float)Math.Round(MousePosition.X / scale.X, 2) * scale.X, (float)Math.Round(MousePosition.Y / scale.Y, 2) * scale.Y), null, Color.Green, 0f, new Vector2(circle.Width, circle.Height) / 2, 0.03f, default, default);
+                    DrawTextCentered(_spriteBatch, font_Arial, "Placement Mode", new Vector2(viewSize.X / 2, 25), Color.IndianRed * 0.50f, 2f);
+                    DrawTextCentered(_spriteBatch, font_Arial, "Hold shift to snap to grid, Lclick to place, Rclick to remove last", new Vector2(viewSize.X / 2, viewSize.Y - 40), Color.White * 0.50f, 1.333f);
+                    DrawTextCentered(_spriteBatch, font_Arial, "Esc to return w/o saving, Tab to return & save, Enter to save & simulate", new Vector2(viewSize.X / 2, viewSize.Y - 20), Color.White * 0.50f, 1.333f);
+                    _spriteBatch.DrawString(font_Arial, SnapToGrid ? RoundedSnapPos.ToString() : RoundedNormalPos.ToString(), MousePosition, Color.White * 0.75f, 0f, default, 1f, default, default); ;
                     _spriteBatch.End();
+
+                    AddSelectedChain(gameTime, true);
+
                     break;
             }
 
@@ -523,7 +578,7 @@ namespace VerletChainAlgo
 
                 float average = combinedGrav.Length() / (chain.segmentCount - 1);
 
-                _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, mat);
+                _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, SpriteMatrix);
                 for (int i = 1; i < chain.segmentCount; i++)
                 {
                     float gravScale = Math.Max(VertexGravityArray[i].Length() - average, 0);
