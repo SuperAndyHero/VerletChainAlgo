@@ -15,28 +15,32 @@ namespace VerletChainAlgo
         public static float DefaultDrawScale => 14f;
         public static Vector2 DefaultDrawOffset => Vector2.Zero;//-Game1.viewSize / 2.5f;//offsets everything on the screen (you can also move the camera)
 
-        public static bool DrawSprite => false;
-        public static string TexturePath => "D:/Documents/My Games/Terraria/tModLoader/ModSources/TailVanities/Tails/Fox.png";
-        public static Vector2 SpriteOffset => new Vector2(0, -8f);
-        public static float SpriteScale => 1f;
+        public static bool DrawSprite => true;
+        public static string TexturePath => "Path/To/Png/Here.png";
+        public static Vector2 BackSpriteOffset => new Vector2(0, -16f);
+        public static float BackSpriteScale => 1f;
     }
 
     public class ChainInfo
     {
-        //dont change thees if using build mode
-        public int vertexCount = 9;
-        public float vertexDefaultDistance = 9;
-
         //these 3 variables dont matter much, just keep them the same as your chain
         public float VertexDrag = 1.15f;
-        public int PhysicsRepetitions = 5;//this effects how this chain acts in real-time, if you wich to change sim speed change the values in SimInfo instead
-        public Vector2 VertexGravityMult = Vector2.One;
+        public int PhysicsRepetitions = 5;//this effects how this chain acts in real-time, if you wish to change sim speed change the values in SimInfo instead
 
 
-        public float MinimumGravStrength => 2f;//this increases the rigidness of the chain, the longer the chain the lower this should be
+        public Vector2 ChainOffset = new Vector2(0, 0);//the origin of the chain
+
+        public float MinimumGravStrength => 0.7f;//this increases the rigidness of the chain, the longer the chain the lower this should be
         public float MaximumGravStrength => 1000f;//this increases the rigidness of the chain, the longer the chain the lower this should be
+        public float MaxAverageStrength => vertexCount * 3f;//the max average strength, keep this between vertexCount x1 and x3
 
-        public List<VertexOverride> ConstraintOverrides => new List<VertexOverride>
+        public static float TotalLengthMult => 0.93f;//allows you scale the length of the entire chain, useful if the forces are stretching it out too far
+
+        public float Width => 9;
+        public Vector2 TailSpriteSize => new Vector2(0.2f, 17.6f);//rename
+        public Vector2 TailSpriteOffset => new Vector2(0, -18.70f);//rename
+
+        public List<VertexOverride> ConstraintOverrides => new List<VertexOverride>//this is for setting fine tuning a chain
         {
             //new VertexOverride()
             //{
@@ -66,6 +70,9 @@ namespace VerletChainAlgo
             //},
         };
 
+        //dont change these if using build mode
+        public int vertexCount = 9;
+        public float vertexDefaultDistance = 9;
         /// <summary>
         /// this is for changing each length on its own in order to get close to the desired shape
         /// copy these over to your chain when done
@@ -82,7 +89,6 @@ namespace VerletChainAlgo
         10,
         9 //last number doesn't matter
         };
-
         /// <summary>
         /// This is the shape it is aiming for, each point uses the previous point at the starting location
         /// </summary>
@@ -105,8 +111,6 @@ namespace VerletChainAlgo
 
                 new Vector2(3, -9) * new Vector2(1, -1)
         };
-
-        public Vector2 ChainOffset = new Vector2(0, 0);//the origin of the chain
     }
 
     public class VertexOverride

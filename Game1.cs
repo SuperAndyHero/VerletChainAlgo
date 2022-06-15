@@ -10,6 +10,7 @@ using System.Text;
 using System.Windows;
 using TextCopy;
 using VerletChainAlgo;
+using static VerletChainAlgo.HelperMethods;
 
 namespace VerletChainAlgo
 {
@@ -66,13 +67,14 @@ namespace VerletChainAlgo
         }
 
         #region other starting values (do not edit these)
-        public Vector2[] VertexGravityArray = null;//stores current grav values
+        public static Vector2[] VertexGravityArray = null;//stores current grav values
 
         //public Vector2[] SettledPointArray = null;
         public int facingDirection = 1; //1, -1
         #endregion
 
-        public Vector2[] NextWantedVertexGravityArray;
+        public static Vector2[] NextWantedVertexGravityArray;
+        public static Vector2[] SettledPoints;
 
         protected override void Initialize()
         {
@@ -108,23 +110,22 @@ namespace VerletChainAlgo
             spineBuffer = new VertexBuffer(_graphics.GraphicsDevice, typeof(VertexPositionColor), info.vertexCount, BufferUsage.WriteOnly);
             shapeBuffer = new VertexBuffer(_graphics.GraphicsDevice, typeof(VertexPositionColor), info.vertexCount, BufferUsage.WriteOnly);
 
-            Vector2[] settledPoints;
             //if (SettledPointArray != null)
             //    settledPoints = SettledPointArray;
             //else
             //{
-                settledPoints = new Vector2[info.vertexCount];
+            SettledPoints = new Vector2[info.vertexCount];
                 for (int i = 0; i < info.vertexCount; i++)
                 {
                     float dist = distances ? info.VertexDistanceArray[i] : info.vertexDefaultDistance;
-                    Vector2 grav = gravities ? VertexGravityArray[i] * info.VertexGravityMult : info.VertexGravityMult;
-                    settledPoints[i] = (grav * dist) + (i > 0 ? settledPoints[i - 1] : Vector2.Zero);
+                    Vector2 grav = VertexGravityArray[i];
+                    SettledPoints[i] = (grav * dist) + (i > 0 ? SettledPoints[i - 1] : Vector2.Zero);
                 }
             //}
 
 
             chain = new VerletChainInstance(info.vertexCount, info.ChainOffset,
-                ((settledPoints[info.vertexCount - 1]) * facingDirection), info.vertexDefaultDistance, info.VertexGravityMult * facingDirection,
+                ((SettledPoints[info.vertexCount - 1]) * facingDirection), info.vertexDefaultDistance, null,
                 gravities, VertexGravityArray?.ToList(), distances, info.VertexDistanceArray?.ToList())
             {
                 drag = info.VertexDrag,
@@ -132,9 +133,118 @@ namespace VerletChainAlgo
             };
 
             SetShapeBuffer(info.WantedVertexPoints, info.ChainOffset);
+            SetTextureGeometryBuffer(info);
 
             NextWantedVertexGravityArray = Enumerable.Repeat(Vector2.Zero, info.vertexCount).ToArray();
         }
+
+        public Vector2[] texCoordR;
+        int[] indices;
+        public VertexBuffer geometryBuffer;
+        public IndexBuffer geometryIndexBuffer;
+        public void SetTextureGeometryBuffer(ChainInfo info)
+        {
+            //removed dedserv checks since this is all wrapped in one
+            geometryBuffer = new VertexBuffer(_graphics.GraphicsDevice, typeof(VertexPositionColorTexture), ((info.vertexCount - 1) * 3) + 2, BufferUsage.WriteOnly);
+            geometryIndexBuffer = new IndexBuffer(_graphics.GraphicsDevice, typeof(short), (info.vertexCount - 1) * 9, BufferUsage.WriteOnly);
+
+            #region index buffer
+            indices = new int[geometryIndexBuffer.IndexCount];
+            for (int i = 0; i < indices.Length / 3; i++)
+            {
+                int index = i * 3;
+                switch (i % 3)
+                {
+                    case 0:
+                        indices[index] = i;
+                        indices[index + 1] = i + 1;
+                        indices[index + 2] = i + 2;
+                        break;
+                    case 1:
+                        indices[index] = i;
+                        indices[index + 2] = i + 1;
+                        indices[index + 1] = i + 3;
+                        break;
+                    case 2:
+                        indices[index] = i - 2;
+                        indices[index + 2] = i + 1;
+                        indices[index + 1] = i;
+                        break;
+                }
+            }
+
+            geometryIndexBuffer.SetData(indices);
+            #endregion
+
+            #region tex coords
+            Vector2 largestSize = Vector2.Zero;
+            Vector2 smallestSize = Vector2.One * 65536;
+            foreach (Vector2 vec in SettledPoints)
+            {
+                if (Math.Abs(vec.X) > largestSize.X)
+                    largestSize.X = vec.X;
+                if (vec.X < smallestSize.X)
+                    smallestSize.X = vec.X;
+
+                if (Math.Abs(vec.Y) > largestSize.Y)
+                    largestSize.Y = vec.Y;
+                if (-vec.Y < smallestSize.Y)
+                    smallestSize.Y = -vec.Y;
+            }
+
+
+            largestSize += CurrentInfo.TailSpriteSize * new Vector2(1, -1);//tailBase.TexSizeOffset * new Vector2(1, -1);
+            smallestSize += CurrentInfo.TailSpriteOffset * new Vector2(1, -1);//tailBase.TexPosOffset * new Vector2(1, -1);
+
+            texCoordR = TexCoords(info, 1, SettledPoints, smallestSize, largestSize);
+            #endregion
+        }
+
+        private Vector2[] TexCoords(ChainInfo info, int dir, Vector2[] settledPoints, Vector2 smallestSize, Vector2 largestSize)
+        {
+            Vector2[] texCoords = new Vector2[((info.vertexCount - 1) * 3) + 2];
+
+            Vector2 TexCoordConvert(Vector2 realPosition)
+            {
+                Vector2 diff = (realPosition - smallestSize) - (new Vector2(0, info.Width));
+                Vector2 size = diff / (largestSize - (new Vector2(0, info.Width) * 2));
+                return (size * new Vector2(1, -1)) + new Vector2(0, 1);
+            }
+            
+            texCoords[2] = TexCoordConvert(settledPoints[1]);
+
+            texCoords[1] = TexCoordConvert(settledPoints[0] + (Vector2.UnitY * info.Width * -dir));
+            texCoords[0] = TexCoordConvert(settledPoints[0] + (Vector2.UnitY * info.Width * dir));
+
+            for (int i = 1; i < info.vertexCount - 1; i++)//sets all vertexes besides the last two
+            {
+                int index = i * 3;
+
+                texCoords[index + 2] = TexCoordConvert(settledPoints[i + 1]);
+
+                float directionRot = (settledPoints[i + 1] - settledPoints[i]).ToRotation() + ((float)Math.PI * 0.5f);
+
+                Vector2 segLocationA = settledPoints[i] + (Vector2.UnitY.RotatedBy(directionRot + (Math.PI * 0.5f * dir)) * info.Width);
+                texCoords[index + 1] = TexCoordConvert(segLocationA);
+
+                Vector2 segLocationB = settledPoints[i] + (Vector2.UnitY.RotatedBy(directionRot - (Math.PI * 0.5f * dir)) * info.Width);
+                texCoords[index] = TexCoordConvert(segLocationB);
+            }
+
+
+            //last two vert
+            float directionRot2 = (settledPoints[info.vertexCount - 2] - settledPoints[info.vertexCount - 1]).ToRotation() + ((float)Math.PI * 0.5f);
+
+            Vector2 segLocation2A = settledPoints[info.vertexCount - 1] + (Vector2.UnitY.RotatedBy(directionRot2 + (Math.PI * 0.5f * dir)) * info.Width);
+            texCoords[geometryBuffer.VertexCount - 2] = TexCoordConvert(segLocation2A);
+
+            Vector2 segLocation2B = settledPoints[info.vertexCount - 1] + (Vector2.UnitY.RotatedBy(directionRot2 - (Math.PI * 0.5f * dir)) * info.Width);
+            texCoords[geometryBuffer.VertexCount - 1] = TexCoordConvert(segLocation2B);
+
+            return texCoords;
+        }
+
+        
 
         public void SetShapeBuffer(Vector2[] RelativePoints, Vector2 offset)
         {
@@ -262,10 +372,27 @@ namespace VerletChainAlgo
                     break;
 
                 case SimState.running:
+                    if (ButtonPressed(Keys.H))
+                        ClipboardService.SetText(BuildOutputText(CurrentInfo));
                     if (ButtonPressed(Keys.Escape))
                         StartWaitingMode();
                     if (ButtonPressed(Keys.Space))
                         paused = !paused;
+                    if ((!paused || ButtonPressed(Keys.U)) && chain != null)
+                    {
+                        SettledPoints = new Vector2[chain.ropeSegments.Count];
+                        for (int i = 0; i < chain.ropeSegments.Count; i++)
+                        {
+                            SettledPoints[i] = chain.ropeSegments[i].posNow;
+                        }
+                        SetTextureGeometryBuffer(CurrentInfo);
+                    }
+                    if (ButtonPressed(Keys.I))
+                    {
+                        CurrentTexMode += 1;
+                        if ((int)CurrentTexMode > 2)
+                            CurrentTexMode = TextureMode.None;
+                    }
                     if (!paused)
                     {
                         if (chain != null)
@@ -384,9 +511,9 @@ namespace VerletChainAlgo
             for (int i = 0; i < PlacementList.Count; i++)
             {
                 newInfo.WantedVertexPoints[i] = PlacementList[i] - (i > 0 ? PlacementList[i - 1] : PlacementList[i]);
-                newInfo.VertexDistanceArray[i] = (i == PlacementList.Count - 1) ? 
+                newInfo.VertexDistanceArray[i] = ((i == PlacementList.Count - 1) ? 
                     newInfo.VertexDistanceArray[i - 1] : 
-                    Vector2.Distance(PlacementList[i], PlacementList[i + 1]);
+                    Vector2.Distance(PlacementList[i], PlacementList[i + 1])) * ChainInfo.TotalLengthMult;
             }
 
             newInfo.ChainOffset = PlacementList[0];
@@ -447,6 +574,24 @@ namespace VerletChainAlgo
                         NextWantedVertexGravityArray[i].Y = curOverride.setY.Value;
                 }
 
+            if (info.MaxAverageStrength > 0)
+            {
+                float average = 0;
+                for (int i = 0; i < info.vertexCount; i++)
+                {
+                    average += NextWantedVertexGravityArray[i].Length();
+                }
+                average /= (info.vertexCount - 1);
+
+                if(average > info.MaxAverageStrength)
+                {
+                    for (int i = 0; i < info.vertexCount; i++)
+                    {
+                            NextWantedVertexGravityArray[i] *= (1 + info.MaxAverageStrength) - NextWantedVertexGravityArray[i].Length();
+                    }
+                }
+            }
+
             //NextWantedVertexGravityArray[2] = new Vector2(3, 1f);
             //NextWantedVertexGravityArray[3] = new Vector2(3, 1f);
             //NextWantedVertexGravityArray[4] = new Vector2(3, 1f);
@@ -492,6 +637,17 @@ namespace VerletChainAlgo
             return new Color(rand.Next(255), rand.Next(255), rand.Next(255));
         }
 
+        public enum TextureMode
+        {
+            None,
+            Texture,
+            TexturePoints
+        }
+
+        public TextureMode CurrentTexMode = TextureMode.None;
+        VertexPositionColorTexture[] vertexPos;
+        private bool DrawTextureGeo = false;
+
         public void DrawGeometry(BasicEffect effect, EffectPass pass, GraphicsDevice graphicsDevice)
         {
             if (chain != null && spineBuffer != null)
@@ -503,10 +659,61 @@ namespace VerletChainAlgo
 
                 spineBuffer.SetData(vertexPos);
             }
-            effect.TextureEnabled = false;//this or a second effect is needed
+            //effect.TextureEnabled = false;//this or a second effect is needed
             effect.View = Matrix.CreateTranslation(new Vector3(EverythingDrawOffset * new Vector2(1, -1), 0)) * Matrix.CreateScale(EverythingDrawScale, -EverythingDrawScale, 1);
 
+            RasterizerState rs = new RasterizerState
+            {
+                CullMode = CullMode.None
+            };
+            graphicsDevice.RasterizerState = rs;
+
+            if (DrawTextureGeo = (CurrentState == SimState.running && (CurrentTexMode == TextureMode.TexturePoints || CurrentTexMode == TextureMode.Texture) && chain != null && geometryBuffer != null))
+            {
+                effect.TextureEnabled = true;
+                pass.Apply();
+
+                vertexPos = new VertexPositionColorTexture[geometryBuffer.VertexCount];
+
+                Vector2 startLocation = chain.ropeSegments[0].posNow;
+                Vector2[] texCor = texCoordR;
+
+                vertexPos[2] = new VertexPositionColorTexture(new Vector3(chain.ropeSegments[1].posNow, 0), Color.White, texCor[2]);
+
+                vertexPos[1] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY * -1 * CurrentInfo.Width), 0), Color.White, texCor[1]);
+                vertexPos[0] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY * CurrentInfo.Width), 0), Color.White, texCor[0]);
+
+                for (int i = 1; i < chain.segmentCount - 1; i++)//sets all vertexes besides the last two
+                {
+                    int index = i * 3;
+                    vertexPos[index + 2] = new VertexPositionColorTexture(new Vector3(chain.ropeSegments[i + 1].posNow, 0), Color.White, texCor[index + 2]);
+
+                    float directionRot = (chain.ropeSegments[i + 1].posNow - chain.ropeSegments[i].posNow).ToRotation() + (float)Math.PI * 0.5f;
+                    Vector2 segLocation = chain.ropeSegments[i].posNow;
+                    vertexPos[index + 1] = new VertexPositionColorTexture(new Vector3(segLocation + (Vector2.UnitY.RotatedBy(directionRot + (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[index + 1]);
+                    vertexPos[index] = new VertexPositionColorTexture(new Vector3(segLocation + (Vector2.UnitY.RotatedBy(directionRot - (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[index]);
+                }
+
+                //last two vert
+                float directionRot2 = (chain.ropeSegments[chain.segmentCount - 2].posNow - chain.ropeSegments[chain.segmentCount - 1].posNow).ToRotation() + (float)Math.PI * 0.5f;
+                Vector2 segLocation2 = chain.ropeSegments[chain.segmentCount - 1].posNow;
+                vertexPos[geometryBuffer.VertexCount - 2] = new VertexPositionColorTexture(new Vector3(segLocation2 + (Vector2.UnitY.RotatedBy(directionRot2 + (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[geometryBuffer.VertexCount - 2]);
+                vertexPos[geometryBuffer.VertexCount - 1] = new VertexPositionColorTexture(new Vector3(segLocation2 + (Vector2.UnitY.RotatedBy(directionRot2 - (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[geometryBuffer.VertexCount - 1]);
+
+                geometryBuffer.SetData(vertexPos);
+
+                effect.TextureEnabled = true;
+                effect.Texture = backTexture;
+                
+                graphicsDevice.SetVertexBuffer(geometryBuffer);
+                graphicsDevice.Indices = geometryIndexBuffer;
+                //graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, geometryIndexBuffer.IndexCount / 3);
+                graphicsDevice.DrawUserIndexedPrimitives(PrimitiveType.TriangleList, vertexPos, 0, vertexPos.Length, indices, 0, geometryIndexBuffer.IndexCount / 3);
+            }
+
+            effect.TextureEnabled = false;
             pass.Apply();
+
             if (shapeBuffer != null)
             {
                 graphicsDevice.SetVertexBuffer(shapeBuffer);
@@ -527,7 +734,7 @@ namespace VerletChainAlgo
         public void DrawTextCentered(SpriteBatch sb, SpriteFont font, string text, Vector2 center, Color color, float scale)
         {
             Vector2 textSize = font_Arial.MeasureString(text) * scale;
-            Vector2 textPosition = new Vector2((int)(center.X - (textSize.X / 2)), (int)(center.Y - (textSize.Y / 2)));
+            Vector2 textPosition = new Vector2((center.X - (textSize.X / 2)), (center.Y - (textSize.Y / 2)));
             sb.DrawString(font, text, textPosition, color, 0f, default, scale, default, default);
         }
 
@@ -581,7 +788,7 @@ namespace VerletChainAlgo
             if (SimInfo.DrawSprite)
             {
                 _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, SpriteMatrix);
-                _spriteBatch.Draw(backTexture, new Vector2(0, 0) - new Vector2(0, (backTexture.Height * SimInfo.SpriteScale)) - (SimInfo.SpriteOffset), null, new Color(150, 150, 150), 0f, default, SimInfo.SpriteScale, SpriteEffects.None, default);
+                _spriteBatch.Draw(backTexture, new Vector2(0, 0) - new Vector2(0, (backTexture.Height * SimInfo.BackSpriteScale)) - (SimInfo.BackSpriteOffset), null, new Color(150, 150, 150), 0f, default, SimInfo.BackSpriteScale, SpriteEffects.None, default);
                 _spriteBatch.End();
             }
 
@@ -605,6 +812,9 @@ namespace VerletChainAlgo
                         _spriteBatch.DrawString(font_Arial, "Grav " + i.ToString() + " : " + VertexGravityArray[i].ToString(), new Vector2(5, 30 + (i * 20)), Color.White * 0.8f);
                         _spriteBatch.DrawString(font_Arial, "Pos " + i.ToString() + " : " + (chain.ropeSegments[i].posNow).ToString(), new Vector2(viewSize.X - 265, 30 + (i * 20)), Color.White * 0.8f);
                     }
+                    _spriteBatch.DrawString(font_Arial, "h: Copy all chain values", new Vector2(10, viewSize.Y - 60), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "i: Swap texture mode", new Vector2(10, viewSize.Y - 40), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "u: Update texture (Auto updated when running)", new Vector2(10, viewSize.Y - 20), Color.White * 0.8f);
                     _spriteBatch.End();
 
                     _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null);
@@ -661,6 +871,18 @@ namespace VerletChainAlgo
 
             if (CurrentState == SimState.running)
             {
+                if (DrawTextureGeo && CurrentTexMode == TextureMode.TexturePoints)
+                {
+                    _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, SpriteMatrix);
+                    for (int i = 0; i < vertexPos.Length; i++)
+                    {
+                        _spriteBatch.Draw(circle, new Vector2(vertexPos[i].Position.X, vertexPos[i].Position.Y), null, new Color(70, 70, 70, 0), 0f, Vector2.One * 100, 0.0075f, default, default);
+                        DrawTextCentered(_spriteBatch, font_Arial, i.ToString(), new Vector2(vertexPos[i].Position.X, vertexPos[i].Position.Y), Color.AliceBlue, 0.1f);
+                    }
+                    _spriteBatch.End();
+                }
+
+
                 Vector2 combinedGrav = Vector2.Zero;
 
                 for (int i = 1; i < chain.segmentCount; i++)
@@ -675,8 +897,8 @@ namespace VerletChainAlgo
                 for (int i = 1; i < chain.segmentCount; i++)
                 {
                     Vector2 pos = (chain.ropeSegments[i].posNow);
-                    _spriteBatch.Draw(pixel, pos, null, Color.Red * 0.5f, 0f, default, new Vector2(0.1f, (int)VertexGravityArray[i].Y), default, default);
-                    _spriteBatch.Draw(pixel, pos, null, Color.Blue * 0.5f, 0f, default, new Vector2((int)VertexGravityArray[i].X, 0.1f), default, default);
+                    _spriteBatch.Draw(pixel, pos, null, Color.Red * 0.5f, 0f, default, new Vector2(0.1f, VertexGravityArray[i].Y), default, default);
+                    _spriteBatch.Draw(pixel, pos, null, Color.Blue * 0.5f, 0f, default, new Vector2(VertexGravityArray[i].X, 0.1f), default, default);
                 }
 
                 if (paused)
@@ -696,6 +918,7 @@ namespace VerletChainAlgo
 
                 }
                 _spriteBatch.End();
+                DrawTextureGeo = false;
             }
 
 
