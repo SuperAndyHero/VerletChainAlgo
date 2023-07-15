@@ -16,8 +16,8 @@ namespace VerletChainAlgo
         public static Vector2 DefaultDrawOffset => Vector2.Zero;//-Game1.viewSize / 2.5f;//offsets everything on the screen (you can also move the camera)
 
         public static bool DrawSprite => true;
-        public static string TexturePath => "Path/To/Png/Here.png";
-        public static Vector2 BackSpriteOffset => new Vector2(0, -16f);
+        public static string TexturePath => "D:\\Documents\\My Games\\Terraria\\tModLoader\\ModSources\\TailLibExample\\Tails\\ExampleTail.png";//"Path/To/Png/Here.png";
+        public static Vector2 BackSpriteOffset => new Vector2(0, -6f);
         public static float BackSpriteScale => 1f;
     }
 
@@ -30,47 +30,54 @@ namespace VerletChainAlgo
 
         public Vector2 ChainOffset = new Vector2(0, 0);//the origin of the chain
 
-        public float MinimumGravStrength => 0.7f;//this increases the rigidness of the chain, the longer the chain the lower this should be
-        public float MaximumGravStrength => 1000f;//this increases the rigidness of the chain, the longer the chain the lower this should be
-        public float MaxAverageStrength => vertexCount * 3f;//the max average strength, keep this between vertexCount x1 and x3
+        public float MinimumGravStrength => 0.3f;//this increases the rigidness of the chain, the longer the chain the lower this should be
+        public float MaximumGravStrength => 1f;
+        public float MaxAverageStrength => vertexCount * 3f;//the max average strength, keep this between vertexCount x1 and x3 for simple chains, or higher for complex ones
 
-        public static float TotalLengthMult => 0.93f;//allows you scale the length of the entire chain, useful if the forces are stretching it out too far
+        public static float TotalLengthMult => 0.97f;//allows you scale the distances between every point in chain, useful to account for forces stretching it out too far
 
-        public float Width => 9;
-        public Vector2 TailSpriteSize => new Vector2(0.2f, 17.6f);//rename
-        public Vector2 TailSpriteOffset => new Vector2(0, -18.70f);//rename
+        public float Width => 9.75f;//width of tail, outwards at a right angle to the chain
+        public Vector2 SpriteMaxSizeOffset => new Vector2(6f, 12.2f);//offsets the largest edge of the sprite 
+        public Vector2 SpriteMinSizeOffset => new Vector2(0f, 0.80f);//offsets the smallest edge of the sprite (good for aligning bottom edge)
 
-        public List<VertexOverride> ConstraintOverrides => new List<VertexOverride>//this is for setting fine tuning a chain
+        public List<VertexOverride> ConstraintOverrides => new List<VertexOverride>//this is for fine tuning a chain
         {
+            new VertexOverride()
+            {
+                index = 6,
+                maxStr = 1.1f
+            },
             //new VertexOverride()
             //{
-            //    index = 12,
-            //    setY = 1f
+            //    index = 4,
+            //    maxStr = 1.3f,
             //},
             //new VertexOverride()
             //{
-            //    index = 7,
-            //    setX = 1f
+            //    index = 3,
+            //    setX = -0.2f
             //},
             //new VertexOverride()
             //{
             //    index = 1 ,
             //    minStr = 1.4f,
             //},
+
             //new VertexOverride()
             //{
-            //    index = 2,
-            //    minStr = 1.2f 
+            //    index = 6,
+            //    setX = 0.75f,
+            //    setY = 0f
             //},
-            //new VertexOverride()
+            //            new VertexOverride()
             //{
-            //    index = 4,
-            //    minStr = 0.8f,
-            //    setX = 0.5f,
-            //},
+            //    index = 5,
+            //    setX = 1f,
+            //    setY = -0.2f
+            //}
         };
 
-        //dont change these if using build mode
+        #region dont change these if using build mode
         public int vertexCount = 9;
         public float vertexDefaultDistance = 9;
         /// <summary>
@@ -92,7 +99,7 @@ namespace VerletChainAlgo
         /// <summary>
         /// This is the shape it is aiming for, each point uses the previous point at the starting location
         /// </summary>
-        public Vector2[] WantedVertexPoints = new Vector2[] {
+        public Vector2[] WantedVertexPoints = new Vector2[] {//default, is defined when running
                 new Vector2(0, 0),
 
                 new Vector2(11, 2) * new Vector2(1, -1),
@@ -111,6 +118,7 @@ namespace VerletChainAlgo
 
                 new Vector2(3, -9) * new Vector2(1, -1)
         };
+        #endregion
     }
 
     public class VertexOverride

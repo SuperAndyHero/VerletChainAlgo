@@ -193,8 +193,8 @@ namespace VerletChainAlgo
             }
 
 
-            largestSize += CurrentInfo.TailSpriteSize * new Vector2(1, -1);//tailBase.TexSizeOffset * new Vector2(1, -1);
-            smallestSize += CurrentInfo.TailSpriteOffset * new Vector2(1, -1);//tailBase.TexPosOffset * new Vector2(1, -1);
+            largestSize += (CurrentInfo.SpriteMaxSizeOffset + SpriteSizeTempOffset) * new Vector2(1, -1);//tailBase.TexSizeOffset * new Vector2(1, -1);
+            smallestSize += (CurrentInfo.SpriteMinSizeOffset + SpritePosTempOffset) * new Vector2(1, -1);//tailBase.TexPosOffset * new Vector2(1, -1);
 
             texCoordR = TexCoords(info, 1, SettledPoints, smallestSize, largestSize);
             #endregion
@@ -222,7 +222,7 @@ namespace VerletChainAlgo
 
                 texCoords[index + 2] = TexCoordConvert(settledPoints[i + 1]);
 
-                float directionRot = (settledPoints[i + 1] - settledPoints[i]).ToRotation() + ((float)Math.PI * 0.5f);
+                float directionRot = ((settledPoints[i + 1] - settledPoints[i]) + (settledPoints[i] - settledPoints[i - 1])).ToRotation() + ((float)Math.PI * 0.5f);
 
                 Vector2 segLocationA = settledPoints[i] + (Vector2.UnitY.RotatedBy(directionRot + (Math.PI * 0.5f * dir)) * info.Width);
                 texCoords[index + 1] = TexCoordConvert(segLocationA);
@@ -305,6 +305,11 @@ namespace VerletChainAlgo
 
         public List<VertexOverride> CurrentOverrides = new List<VertexOverride>();
 
+        public static Vector2 SpriteSizeTempOffset = Vector2.Zero;
+        public static Vector2 SpritePosTempOffset = Vector2.Zero;
+
+        public static bool WireFrameMode = false;
+
         protected override void Update(GameTime gameTime)
         {
             Vector2 newviewSize = new Vector2(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
@@ -335,6 +340,9 @@ namespace VerletChainAlgo
                 CameraZoom -= 0.01f;
             if (ButtonPressed(Keys.Back))
                 CameraZoom = 1;
+
+            if (ButtonPressed(Keys.OemPipe))
+                WireFrameMode = !WireFrameMode;
 
             CameraZoom *= 1 + ((mouseState.ScrollWheelValue - lastMouseState.ScrollWheelValue) * 0.0005f);
 
@@ -416,6 +424,86 @@ namespace VerletChainAlgo
                             chain.UpdateChain();
                         }
 
+                        if (keyboardState.IsKeyDown(Keys.Up) && keyboardState.IsKeyDown(Keys.LeftShift))
+                        {
+                            for (int i = 1; i < chain.ropeSegments.Count; i++)
+                            {
+                                chain.ropeSegments[i].posNow.Y -= 1;
+                            }
+                        }
+                        if (keyboardState.IsKeyDown(Keys.Down) && keyboardState.IsKeyDown(Keys.LeftShift))
+                        {
+                            for (int i = 1; i < chain.ropeSegments.Count; i++)
+                            {
+                                chain.ropeSegments[i].posNow.Y += 1;
+                            }
+                        }
+                        if (keyboardState.IsKeyDown(Keys.Right) && keyboardState.IsKeyDown(Keys.LeftShift))
+                        {
+                            for (int i = 1; i < chain.ropeSegments.Count; i++)
+                            {
+                                chain.ropeSegments[i].posNow.X += 1;
+                            }
+                        }
+                        if (keyboardState.IsKeyDown(Keys.Left) && keyboardState.IsKeyDown(Keys.LeftShift))
+                        {
+                            for (int i = 1; i < chain.ropeSegments.Count; i++)
+                            {
+                                chain.ropeSegments[i].posNow.X -= 1;
+                            }
+                        }
+
+                        //SpriteSizeTempOffset
+                        //SpritePosTempOffset
+                        if (keyboardState.IsKeyDown(Keys.LeftShift))
+                        {
+                            if (ButtonPressed(Keys.Z) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.Z)))
+                            {
+                                SpriteSizeTempOffset.X -= 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                            if (ButtonPressed(Keys.X) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.X)))
+                            {
+                                SpriteSizeTempOffset.X += 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+
+                            if (ButtonPressed(Keys.C) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.C)))
+                            {
+                                SpritePosTempOffset.X -= 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                            if (ButtonPressed(Keys.V) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.V)))
+                            {
+                                SpritePosTempOffset.X += 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                        }
+                        else
+                        {
+                            if (ButtonPressed(Keys.Z) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.Z)))
+                            {
+                                SpriteSizeTempOffset.Y -= 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                            if (ButtonPressed(Keys.X) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.X)))
+                            {
+                                SpriteSizeTempOffset.Y += 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+
+                            if (ButtonPressed(Keys.C) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.C)))
+                            {
+                                SpritePosTempOffset.Y -= 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                            if (ButtonPressed(Keys.V) || (keyboardState.IsKeyDown(Keys.LeftControl) && keyboardState.IsKeyDown(Keys.V)))
+                            {
+                                SpritePosTempOffset.Y += 0.05f;
+                                SetTextureGeometryBuffer(CurrentInfo);
+                            }
+                        }
+
                         if (LeftMousePressed())
                         {
                             int closestIndex = 0;
@@ -479,6 +567,8 @@ namespace VerletChainAlgo
         public void StartSimMode()
         {
             SetupChain(CurrentInfo);
+            //SpriteSizeTempOffset = Vector2.Zero;
+            //SpritePosTempOffset = Vector2.Zero;
             SelectedChainIndex = -1;
             CurrentState = SimState.running;
         }
@@ -648,7 +738,7 @@ namespace VerletChainAlgo
         VertexPositionColorTexture[] vertexPos;
         private bool DrawTextureGeo = false;
 
-        public void DrawGeometry(BasicEffect effect, EffectPass pass, GraphicsDevice graphicsDevice)
+        public void DrawGeometry(BasicEffect effect, EffectPass pass, GraphicsDevice graphicsDevice, bool wireframe = false)
         {
             if (chain != null && spineBuffer != null)
             {
@@ -664,13 +754,15 @@ namespace VerletChainAlgo
 
             RasterizerState rs = new RasterizerState
             {
-                CullMode = CullMode.None
+                CullMode = CullMode.None,
+                FillMode = wireframe ? FillMode.WireFrame : FillMode.Solid
             };
             graphicsDevice.RasterizerState = rs;
 
             if (DrawTextureGeo = (CurrentState == SimState.running && (CurrentTexMode == TextureMode.TexturePoints || CurrentTexMode == TextureMode.Texture) && chain != null && geometryBuffer != null))
             {
                 effect.TextureEnabled = true;
+                effect.Texture = wireframe ? pixel : backTexture; 
                 pass.Apply();
 
                 vertexPos = new VertexPositionColorTexture[geometryBuffer.VertexCount];
@@ -678,17 +770,30 @@ namespace VerletChainAlgo
                 Vector2 startLocation = chain.ropeSegments[0].posNow;
                 Vector2[] texCor = texCoordR;
 
+                //allows the base to tilt if the angle is too extreme
+                const float rotateAngle = (float)Math.PI * 0.175f;
+                float seg0to1angle = (chain.ropeSegments[1].posNow - chain.ropeSegments[0].posNow).ToRotation();
+                bool aboveAngle = seg0to1angle > rotateAngle;
+                bool belowAngle = seg0to1angle < -rotateAngle;
+                float topStartRot = aboveAngle ? seg0to1angle - (Math.Sign(seg0to1angle) * rotateAngle) : 0;
+                float bottomStartRot = belowAngle ? seg0to1angle - (Math.Sign(seg0to1angle) * rotateAngle) : 0;
+
                 vertexPos[2] = new VertexPositionColorTexture(new Vector3(chain.ropeSegments[1].posNow, 0), Color.White, texCor[2]);
 
-                vertexPos[1] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY * -1 * CurrentInfo.Width), 0), Color.White, texCor[1]);
-                vertexPos[0] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY * CurrentInfo.Width), 0), Color.White, texCor[0]);
+                vertexPos[1] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY.RotatedBy(bottomStartRot + (topStartRot * 0.5f)) * -1 * CurrentInfo.Width), 0), aboveAngle ? Color.DarkGray : Color.White, texCor[1]);
+                vertexPos[0] = new VertexPositionColorTexture(new Vector3(startLocation + (Vector2.UnitY.RotatedBy(topStartRot + (bottomStartRot * 0.5f)) * CurrentInfo.Width), 0), aboveAngle ? Color.DarkGray : Color.White, texCor[0]);
 
                 for (int i = 1; i < chain.segmentCount - 1; i++)//sets all vertexes besides the last two
                 {
                     int index = i * 3;
                     vertexPos[index + 2] = new VertexPositionColorTexture(new Vector3(chain.ropeSegments[i + 1].posNow, 0), Color.White, texCor[index + 2]);
 
-                    float directionRot = (chain.ropeSegments[i + 1].posNow - chain.ropeSegments[i].posNow).ToRotation() + (float)Math.PI * 0.5f;
+                    float directionRot =
+                        (((chain.ropeSegments[i + 1].posNow - chain.ropeSegments[i].posNow)) + 
+                        (chain.ropeSegments[i].posNow - chain.ropeSegments[i - 1].posNow)).ToRotation() + 
+                        (float)Math.PI * 0.5f;
+
+                    //Color color = (i == 1 || i == chain.segmentCount - 2)  ? Color.Green : Color.White;
                     Vector2 segLocation = chain.ropeSegments[i].posNow;
                     vertexPos[index + 1] = new VertexPositionColorTexture(new Vector3(segLocation + (Vector2.UnitY.RotatedBy(directionRot + (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[index + 1]);
                     vertexPos[index] = new VertexPositionColorTexture(new Vector3(segLocation + (Vector2.UnitY.RotatedBy(directionRot - (Math.PI * 0.5f)) * CurrentInfo.Width), 0), Color.White, texCor[index]);
@@ -703,7 +808,7 @@ namespace VerletChainAlgo
                 geometryBuffer.SetData(vertexPos);
 
                 effect.TextureEnabled = true;
-                effect.Texture = backTexture;
+                effect.Texture = wireframe ? pixel : backTexture;
                 
                 graphicsDevice.SetVertexBuffer(geometryBuffer);
                 graphicsDevice.Indices = geometryIndexBuffer;
@@ -812,6 +917,11 @@ namespace VerletChainAlgo
                         _spriteBatch.DrawString(font_Arial, "Grav " + i.ToString() + " : " + VertexGravityArray[i].ToString(), new Vector2(5, 30 + (i * 20)), Color.White * 0.8f);
                         _spriteBatch.DrawString(font_Arial, "Pos " + i.ToString() + " : " + (chain.ropeSegments[i].posNow).ToString(), new Vector2(viewSize.X - 265, 30 + (i * 20)), Color.White * 0.8f);
                     }
+                    _spriteBatch.DrawString(font_Arial, "shift + arrows: apply force to chain", new Vector2(10, viewSize.Y - 160), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "c / v + shift + ctrl: Change sprite X position", new Vector2(10, viewSize.Y - 140), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "c / v + ctrl: Change sprite Y position", new Vector2(10, viewSize.Y - 120), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "z / x + shift + ctrl: Change sprite X scale", new Vector2(10, viewSize.Y - 100), Color.White * 0.8f);
+                    _spriteBatch.DrawString(font_Arial, "z / x + ctrl: Change sprite Y scale", new Vector2(10, viewSize.Y - 80), Color.White * 0.8f);
                     _spriteBatch.DrawString(font_Arial, "h: Copy all chain values", new Vector2(10, viewSize.Y - 60), Color.White * 0.8f);
                     _spriteBatch.DrawString(font_Arial, "i: Swap texture mode", new Vector2(10, viewSize.Y - 40), Color.White * 0.8f);
                     _spriteBatch.DrawString(font_Arial, "u: Update texture (Auto updated when running)", new Vector2(10, viewSize.Y - 20), Color.White * 0.8f);
@@ -866,7 +976,11 @@ namespace VerletChainAlgo
                     break;
             }
 
-            DrawGeometry(basicEffect, basicEffect.CurrentTechnique.Passes[0], _graphics.GraphicsDevice);
+
+            DrawGeometry(basicEffect, basicEffect.CurrentTechnique.Passes[0], _graphics.GraphicsDevice, false);
+
+            if (WireFrameMode)
+                DrawGeometry(basicEffect, basicEffect.CurrentTechnique.Passes[0], _graphics.GraphicsDevice, true);
 
 
             if (CurrentState == SimState.running)

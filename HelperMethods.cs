@@ -32,8 +32,12 @@ namespace VerletChainAlgo
         {
             StringBuilder sb = new StringBuilder();
             sb.Append(pubOverride + " string Texture => \"" + SimInfo.TexturePath + "\"");                          sb.AppendLine(";");
-            sb.Append(pubOverride + " Vector2 TexPosOffset => " + CreateVector2Text(info.TailSpriteOffset));        sb.AppendLine(";");
-            sb.Append(pubOverride + " Vector2 TexSizeOffset => " + CreateVector2Text(info.TailSpriteSize));         sb.AppendLine(";");
+            sb.Append(pubOverride + " Vector2 WorldOffset => " + CreateVector2Text(info.ChainOffset));              sb.AppendLine(";");
+            sb.Append(pubOverride + " float Width => " + info.Width);                                               sb.AppendLine("f;");
+            sb.Append(pubOverride + " Vector2 TexPosOffset => " + CreateVector2Text(info.SpriteMinSizeOffset + Game1.SpritePosTempOffset));        sb.AppendLine(";");
+            sb.Append(pubOverride + " Vector2 TexSizeOffset => " + CreateVector2Text(info.SpriteMaxSizeOffset + Game1.SpriteSizeTempOffset));         sb.AppendLine(";");
+            sb.Append(pubOverride + " int PhysicsRepetitions => " + info.PhysicsRepetitions);                       sb.AppendLine(";");
+            sb.Append(pubOverride + " float VertexDrag => " + info.VertexDrag);                                     sb.AppendLine("f;");
             sb.Append(pubOverride + " int VertexCount => " + info.vertexCount);                                     sb.AppendLine(";");
 
             sb.AppendLine(pubOverride + " float[] VertexDistances => new float[] { ");
@@ -42,12 +46,6 @@ namespace VerletChainAlgo
                 sb.Append("\t\t\t");  sb.AppendLine(info.VertexDistanceArray[i].ToString() + ((i == info.VertexDistanceArray.Length - 1) ? "f" : "f, "));
             }
             sb.AppendLine("\t\t};");
-
-            sb.Append(pubOverride + " float Width => " + info.Width);                                               sb.AppendLine("f;");
-            sb.Append(pubOverride + " int PhysicsRepetitions => " + info.PhysicsRepetitions);                       sb.AppendLine(";");
-            sb.Append(pubOverride + " float VertexDrag => " + info.VertexDrag);                                     sb.AppendLine("f;");
-            sb.Append(pubOverride + " Vector2 WorldOffset => " + CreateVector2Text(info.ChainOffset));              sb.AppendLine(";");
-
 
             sb.AppendLine(pubOverride + " Vector2[] VertexGravityForces => new Vector2[] { ");
             for (int i = 0; i < Game1.VertexGravityArray.Length; i++)
